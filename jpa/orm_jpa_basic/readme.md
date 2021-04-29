@@ -97,3 +97,26 @@
 
 
 * JPA를 왜 사용해야 하는가?
+  * SQL 중심적인 개발에서 객체 중심을 개발
+  * 생산성
+    * 저장: jpa.persist(member)
+    * 조회: Member member = jpa.find(memberId) 
+    * 수정: member.setName(“변경할 이름”)
+    * 삭제: jpa.remove(member)
+  * 유지보수
+    * 필드 변경시 모든 SQL 수정 - mybatis
+    * jpa 필드만 수정하면 됨
+  * 성능
+    * 1차 캐시와 동일성(identity) 보장
+      * 같은 트랜잭션 안에서는 같은 엔티티를 반환
+      * DB Isolation Level 이 Read Commit 이어도 애플리케이션에서 Repeatable Read 보장
+    * 트랜잭션을 지원하는 쓰기 지연(transactional write-behind)
+      * 트랜잭션을 커밋할 때까지 insert sql 을 모음
+      * jdbc batch sql 기능을 사용해서 한번에 SQL 전송
+    * 지연 로딩(lazy loading)
+      * 객체가 실제 사용될때 로딩
+      * 필요시 조인하여 즉시 로딩할수도 있음
+  * 패러다임의 불일치 해결
+  * 데이터 접근 추상화와 벤더 독립성
+  * 표준
+
