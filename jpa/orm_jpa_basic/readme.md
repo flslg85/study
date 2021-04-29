@@ -79,13 +79,21 @@
   * Java Persistence API
   * 자바 진영의 ORM 기술 표준
   * JPA 는 애플리케이션과 JDBC 사이에서 동작
-* JPA 표준 명세
-  * JPA 는 인터페이스의 모음
 
 * ORM
   * Object-relational mapping(객체 관계 매핑)
   * ORM 프레임워크가 중간에서 매핑
   * 대중적인 언어에는 대부분 ORM 기술이 존재
 
-* 
-* 
+* JPA 표준 명세
+  * JPA 는 인터페이스의 모음
+  * JPA 2.1 표준 명세를 구현한 3가지 구현체
+  * 하이버네이트, EclipseLink, DataNucleus
+
+* JPA 버전
+  * JPA 1.0(JSR 220) 2006년: 초기 버전, 복합키와 연관관계 기능이 부족
+  * JPA 2.0(JSR 317) 2009년: 대부분의 ORM 기능을 포함, JPA Criteria 추가
+  * JPA 2.1(JSR 338) 2013년: 스토어드 프로시저 접근, Converter, 엔티티 그래프 기능이 추가
+
+
+* JPA를 왜 사용해야 하는가?
