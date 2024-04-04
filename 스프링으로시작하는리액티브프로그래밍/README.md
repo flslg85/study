@@ -2,7 +2,11 @@
 1. [리액티브 프로그래밍](./01.md)
 2. [리액티브 스트림즈(Reactive Streams)](02.md)
 3. [Blocking I/O 와 Non-Blocking I/O](03.md)
-
+4. [리액티브 프로그래밍을 위한 사전지식](04.md)
+8. [Backpressure](08.md)
+9. [Sinks](09.md)
+10. [Scheduler](10.md)
+14. [Operators](14.md)
 
 ---
 
