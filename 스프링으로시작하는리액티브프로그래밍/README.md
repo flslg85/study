@@ -3874,6 +3874,262 @@ public static void main(String[] args) throws InterruptedException {
 11:35:33.349 [parallel-2] INFO com.example.test.Example - # subscriber 2: 4
 ~~~
 
+# 15. Spring Webflux 개요
+
+## 15.1 Spring Webflux의 탄생 배경
+
+- Spring WebFlux 는 리액티브 웹 애플리케이션 구현을 위해 Spring 5.0 부터 지원하는 리액티브 웹 프레임워크
+- 대량의 요청 트래픽을 Spring MVC(Blocking I/O) 방식이 처리하지 못하는 사황이 잦아짐에 따라 적은 수의 스레드로 대량의 요청을 안정적으로 처리할수 있는 Non-Blocking I/O 방식의 Webflux 가 탄생하게 됨
+
+## 15.2 Spring Webflux 의 기술 스택
+
+ . | Spring MVC | Spring Webflux
+--- | --- | ---
+서버 | 서블릿(Servlet) 기반의 프레임워크, apache tomcat 같은 servlet container 에서 Blocking I/O 방식으로 동작 | Non-Blocking I/O 방식으로 동작하는 Netty 등의 서버 엔진에서 동작
+서버 API | 서블릿 기반의 프레임워크이기 때문에 서블릿 API 를 사용 | 기본 서버엔진이 Netty 이지만 Jetty 나 Undertow 같은 서버엔진에서 지원하는 이랙티브 스트림즈 어댑터를 통해 리액티브 스트림즈를 지원
+보안 | 표준 서블릿 필터를 사용하는 Spring Security 가 서블릿 컨테이너와 통합됨 | WebFilter 를 이용해 Spring Security 를 사용
+데이터 액세스 | Spring DATA JDBC, Spring Data JPA, Spring Data MongoDB | Spring Data R2DBC, Non-bolcking I/O 를 지원하는 NoSQL
+
+## 15.3 Spring Webflux 요청 처리 흐름
+
+## 15.4 Spring Webflux 의 핵심 컴포넌트
+
+### HttpHandler
+- 다른 유형의 Http 서버 API 로 request 와 response 를 처리하기 위해 추상화됨
+- 단 하나의 메서드만 가짐
+
+~~~java
+public interface HttpHandler {
+    Mono<Void> handle(ServerHttpRequest request, ServerHttpResponse response);
+}
+~~~
+
+### WebFilter
+- spring MVC 의 Servlet Filter 처럼 핸들러가 요청을 처리하기 전에 전처리 작업을 할수 있도록 해줌
+- 주로 보안, 세션, 타임아웃 처리 등 애플리케이션에서 공통으로 필요한 전처리에 사용
+- WebFilterChain 을 사용하여 원하는 만큼 WebFilter 를 추가할수 있음
+
+~~~java
+public interface WebFilter {
+    Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain);
+}
+~~~
+
+#### WebFilter Sample 1
+- path 에 books 가 포함되어 있으면 로그를 출력하는 예제
+
+~~~java
+@Component
+public class BookLogFilter implements WebFilter {
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+        return chain.filter(exchange).doAfterTerminate(() -> {
+            if (path.contains("books")) {
+                System.out.println("path: " + path + ", status: " +
+                        exchange.getResponse().getStatusCode());
+            }
+        });
+    }
+}
+~~~
+
+### HandlerFilterFunction
+- 함수형 기반의 요청 핸들러에 적용할수 있는 Filter 임
+- filter 메서드로 정의 되어 있고, 파라미터로 전달받은 HandlerFunction 에 연결됨
+
+~~~java
+@FunctionalInterface
+public interface HandlerFilterFunction<T extends ServerResponse, R extends ServerResponse> {
+    Mono<R> filter(ServerRequest request, HandlerFunction<T> next);
+}
+~~~
+
+#### HandlerFilterFunction sample
+- "/v1/router/books/{book-id}" 호출시 BookRouterFunctionFilter 가 적용되도록 함
+
+~~~java
+public class BookRouterFunctionFilter implements HandlerFilterFunction {
+    @Override
+    public Mono<ServerResponse> filter(ServerRequest request, HandlerFunction next) {
+        String path = request.requestPath().value();
+
+        return next.handle(request).doAfterTerminate(() -> {
+            System.out.println("path: " + path + ", status: " +
+                    request.exchange().getResponse().getStatusCode());
+        });
+    }
+}
+
+@Configuration
+public class BookRouterFunction {
+    @Bean
+    public RouterFunction routerFunction() {
+        return RouterFunctions
+                .route(GET("/v1/router/books/{book-id}"),
+                        (ServerRequest request) -> this.getBook(request))
+                .filter(new BookRouterFunctionFilter());
+    }
+
+    public Mono<ServerResponse> getBook(ServerRequest request) {
+        return ServerResponse
+                .ok()
+                .body(Mono.just(BookDto.Response.builder()
+                        .bookId(Long.parseLong(request.pathVariable("book-id")))
+                        .bookName("Advanced Reactor")
+                        .author("Tom")
+                        .isbn("222-22-2222-222-2").build()), BookDto.Response.class);
+    }
+}
+~~~
+
+
+### WebFilter 와 HandlerFilterFunction 차이점
+
+WebFilter | HandlerFilterFunction
+--- | ---
+애플리케이션 내에 정의된 모든 핸들러에 공통으로 동작함. 애너테이션 기반과 함수형 기반의 핸들러에서 동작 | 함수형 기반의 핸들러에서만 동작
+
+### DispatcherHandler
+- WebHandler 의 구현체로서 Spring MVC 의 DispatcherServlet 처럼 중앙에서 먼저 요청을 전달 받은 후에 다른 컴포넌트에 요청 처리를 위임함
+- Spring Bean 으로 등록되도록 설계되었으며, ApplicationContext 에서 HandlerMapping, HandlerAdapter, Handler ResultHandler 등의 요청 처리를 위한 위임 컴포넌트를 검색
+
+### HandlerMapping
+- Spring MVC 에서와 마찬가지로 request 와 handler object 에 대한 매핑을 정의하는 인터페이스
+- HandlerMapping 인터페이스를 구현한 클래스로는 RequestMappingHandlerMapping, RouterFunctionMapping 등이 있음
+
+~~~java
+public interface HandlerMapping {
+    Mono<Object> getHandler(ServerWebExchange exchange);
+}
+~~~
+
+### HandlerAdapter
+- HandlerMapping 을 통해 얻은 핸들러를 직접적으로 호출하는 역할
+- 응답 결과로 Mono\<HandlerResult\> 를 리턴 받음
+
+~~~java
+public interface HandlerAdapter {
+    boolean supports(Object handler);
+
+    Mono<HandlerResult> handle(ServerWebExchange exchange, Object handler);
+}
+~~~
+
+## 15.5 Spring Webflux 의 Non-Blocking 프로세스 구조
+- Blocking I/O 방식의 Spring MVC 는 요청을 처리하는 스레드가 차단될수 있기 때문에 대용량의 thread pool 을 사용해서 하나의 요청을 하나의 스레드가 처리함(thread per request model)
+- Non-Blokcing I/O 방식의 Spring Webflux 는 스레드가 차단되지 않기 때문에, 적은 수의 고정된 thread pool 을 사용해서 더 많은 요청을 처리
+- Webflux 가 thread 차단 없이 더 많은 요청을 처리할수 있는 이유는 요청 처리 방식으로 이벤트 루프 방식을 사용하기 때문
+
+
+## 15.6 Spring Webflux 의 스레드 모델
+- cpu 코어 개수만큼의 thread 를 생성해서 대량의 요청을 처리함
+- 서버측에서 복잡한 연산을 처리하는 등의 cpu 집약적인 작업을 하거나, 클라이언트의 요청으로부터 응답 처리 전 과정안에 Blocking 되는 지점이 존재한다면 오히려 성능이 저하될수 있음
+- 이러한 성능 저하를 보완하고자 클라이언트의 요청을 처리하기 위해 서버 엔진에서 제공하는 스레드풀이 아닌 다른 스레드풀을 사용할수 있는 매커니즘(스케줄러)을 제공함
+
+~~~java
+@FunctionalInterface
+public interface LoopResources extends Disposable {
+        int DEFAULT_IO_WORKER_COUNT = Integer.parseInt(System.getProperty("reactor.netty.ioWorkerCount", "" + Math.max(Runtime.getRuntime().availableProcessors(), 4)));
+    int DEFAULT_IO_SELECT_COUNT = Integer.parseInt(System.getProperty("reactor.netty.ioSelectCount", "-1"));
+    boolean DEFAULT_NATIVE = Boolean.parseBoolean(System.getProperty("reactor.netty.native", "true"));
+    long DEFAULT_SHUTDOWN_QUIET_PERIOD = Long.parseLong(System.getProperty("reactor.netty.ioShutdownQuietPeriod", "2"));
+    long DEFAULT_SHUTDOWN_TIMEOUT = Long.parseLong(System.getProperty("reactor.netty.ioShutdownTimeout", "15"));
+
+}
+~~~
+
+# 16. 애너테이션 기반 컨트롤러
+
+## 16.1 Spring MVC 기반 Controller
+
+~~~java
+@RestController
+@RequestMapping("/v1/mvc/books")
+public class BookMvcController {
+    private final BookMvcService bookMvcService;
+    private final BookMvcMapper mapper;
+
+    public BookMvcController(BookMvcService bookMvcService, BookMvcMapper mapper) {
+        this.bookMvcService = bookMvcService;
+        this.mapper = mapper;
+    }
+
+    @PostMapping
+    public ResponseEntity postBook(@RequestBody BookDto.Post requestBody) {
+        Book book = bookMvcService.createBook(mapper.bookPostToBook(requestBody));
+        return ResponseEntity.ok(mapper.bookToBookResponse(book));
+    }
+
+    @PatchMapping("/{book-id}")
+    public ResponseEntity patchBook(@PathVariable("book-id") long bookId,
+                                    @RequestBody BookDto.Patch requestBody) {
+        requestBody.setBookId(bookId);
+        Book book =
+                bookMvcService.updateBook(mapper.bookPatchToBook(requestBody));
+        return ResponseEntity.ok(mapper.bookToBookResponse(book));
+    }
+
+    @GetMapping("/{book-id}")
+    public ResponseEntity getBook(@PathVariable("book-id") long bookId) {
+        Book book = bookMvcService.findBook(bookId);
+        return ResponseEntity.ok(mapper.bookToBookResponse(book));
+    }
+}
+~~~
+
+## 16.2 Spring Webflux 기반 Controller
+
+~~~java
+@RestController
+@RequestMapping("/v1/books")
+public class BookController {
+    private final BookService bookService;
+    private final BookMapper mapper;
+
+    public BookController(BookService bookService, BookMapper mapper) {
+        this.bookService = bookService;
+        this.mapper = mapper;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono postBook(@RequestBody BookDto.Post requestBody) {
+        Mono<Book> book =
+                bookService.createBook(mapper.bookPostToBook(requestBody));
+
+        Mono<BookDto.Response> response = mapper.bookToBookResponse(book);
+        return response;
+    }
+
+    @PatchMapping("/{book-id}")
+    public Mono patchBook(@PathVariable("book-id") long bookId,
+                                    @RequestBody BookDto.Patch requestBody) {
+        requestBody.setBookId(bookId);
+        Mono<Book> book =
+                bookService.updateBook(mapper.bookPatchToBook(requestBody));
+
+        return mapper.bookToBookResponse(book);
+    }
+
+    @GetMapping("/{book-id}")
+    public Mono getBook(@PathVariable("book-id") long bookId) {
+        Mono<Book> book = bookService.findBook(bookId);
+
+        return mapper.bookToBookResponse(book);
+    }
+}
+
+@Mapper(componentModel = "spring")
+public interface BookMapper {
+    Book bookPostToBook(BookDto.Post requestBody);
+    Book bookPatchToBook(BookDto.Patch requestBody);
+    BookDto.Response bookToResponse(Book book);
+    default Mono<BookDto.Response> bookToBookResponse(Mono<Book> mono) {
+        return mono.flatMap(book -> Mono.just(bookToResponse(book)));
+    }
+}
+~~~
 
 ---
 
