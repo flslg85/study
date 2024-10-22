@@ -1,3 +1,9 @@
+# mac
+#### 비번 설정 초기화
+~~~bash
+$ pwpolicy -clearaccountpolicies
+~~~ 
+
 # intellij
 #### plugins
 * Rainbow Brackets
