@@ -1,7 +1,9 @@
 # mac
 #### 비번 설정 초기화
+- pwpolicy -u "계정명" "옵션"
 ~~~bash
-$ pwpolicy -clearaccountpolicies
+$ pwpolicy -u user -getpolicy     
+$ pwpolicy -u user -clearaccountpolicies
 ~~~ 
 
 # intellij
